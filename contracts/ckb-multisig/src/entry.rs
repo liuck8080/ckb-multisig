@@ -9,9 +9,10 @@ use alloc::{vec, vec::Vec, borrow::ToOwned};
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
 use ckb_std::{
     debug,
-    high_level::{load_script, load_witness_args, load_tx_hash},
+    high_level::{load_script, load_witness_args, load_tx_hash, load_input_since, QueryIter},
     ckb_types::{bytes::Bytes, prelude::*},
-    ckb_constants::Source
+    ckb_constants::Source,
+    error::SysError,
 };
 
 use crate::error::Error;
@@ -94,5 +95,83 @@ pub fn main() -> Result<(), Error> {
 }
 
 fn check_since(since:u64)->Result<(), Error> {
+    const SINCE_VALUE_BITS:usize = 56;
+    const SINCE_VALUE_MASK:u64 = 0x00ffffffffffffff;
+    const SINCE_EPOCH_FRACTION_FLAG:u64 =  0b00100000;
+
+    let since_flags = since >> SINCE_VALUE_BITS;
+    let since_value = since & SINCE_VALUE_MASK;
+
+    for i in 0.. {
+        match load_input_since(i, Source::GroupOutput) {
+            Ok(input_since) => {
+                let input_since_flags = input_since >> SINCE_VALUE_BITS;
+                let input_since_value = input_since & SINCE_VALUE_MASK;
+                if since_flags != input_since_flags {
+                  return Err(Error::IncorrectSinceFlags);
+                } else if input_since_flags == SINCE_EPOCH_FRACTION_FLAG {
+                  let ret = epoch_number_with_fraction_cmp(input_since_value, since_value);
+                  if ret < 0 {
+                    return Err(Error::IncorrectSinceValue);
+                  }
+                } else if input_since_value < since_value {
+                  return Err(Error::IncorrectSinceValue);
+                }
+            },
+            Err(SysError::IndexOutOfBound) => break,
+            Err(err) => return Err(err.into()),
+        };
+    }
     Ok(())
 }
+
+
+
+/* a and b are since value,
+ return 0 if a is equals to b,
+ return -1 if a is less than b,
+ return 1 if a is greater than b */
+ fn epoch_number_with_fraction_cmp(a:u64, b:u64)-> i32 {
+    let number_offset = 0;
+    let number_bits = 24;
+    let number_maximum_value = 1 << number_bits;
+    let number_mask = number_maximum_value - 1;
+    let index_offset = number_bits;
+    let index_bits = 16;
+    let index_maximum_value = 1 << index_bits;
+    let index_mask = index_maximum_value - 1;
+    let length_offset = number_bits + index_bits;
+    let length_bits = 16;
+    let length_maximum_value = 1 << length_bits;
+    let length_mask = length_maximum_value - 1;
+
+    /* extract a epoch */
+    let a_epoch = (a >> number_offset) & number_mask;
+    let a_index = (a >> index_offset) & index_mask;
+    let a_len = (a >> length_offset) & length_mask;
+
+    /* extract b epoch */
+    let b_epoch = (b >> number_offset) & number_mask;
+    let b_index = (b >> index_offset) & index_mask;
+    let b_len = (b >> length_offset) & length_mask;
+
+    if a_epoch < b_epoch {
+      return -1;
+    } else if a_epoch > b_epoch {
+      return 1;
+    } else {
+      /* a and b is in the same epoch,
+         compare a_index / a_len <=> b_index / b_len
+       */
+      let a_block = a_index * b_len;
+      let b_block = b_index * a_len;
+      /* compare block */
+      if a_block < b_block {
+        return -1;
+      } else if a_block > b_block {
+        return 1;
+      } else {
+        return 0;
+      }
+    }
+  }

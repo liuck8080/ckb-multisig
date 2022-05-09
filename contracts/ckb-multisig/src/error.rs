@@ -10,6 +10,9 @@ pub enum Error {
     // Add customized errors here...
     ArgumentsLen = -1,
     WitnessSize = -22,
+    IncorrectSinceFlags = -23,
+    IncorrectSinceValue = -24,
+    PubkeyBlake160Hash = -31,
     InvalidReserveField = -41,
     InvalidPubkeysCnt = -42,
     InvalidThreshold  = -43,
