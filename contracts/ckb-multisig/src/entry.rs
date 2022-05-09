@@ -38,8 +38,8 @@ pub fn main() -> Result<(), Error> {
         u64::from_le_bytes(args[BLAKE160_SIZE..BLAKE160_SIZE + 8].try_into().unwrap())
     } else {0};
 
+    let witness = load_witness_args(0, Source::GroupInput)?;
     let lock_bytes = {
-        let witness = load_witness_args(0, Source::GroupInput)?;
         let lock_opt = witness.lock();
         if lock_opt.is_none() {
             return Err(Error::WitnessSize);
@@ -91,8 +91,77 @@ pub fn main() -> Result<(), Error> {
     }
     check_since(since)?;
 
+    let message = {
+      let mut blake2b = Blake2bBuilder::new(BLAKE2B_BLOCK_SIZE).build();
+      blake2b.update(&load_tx_hash()?);
+      blake2b.update(&(witness.total_size() as u64).to_le_bytes());
+
+      let mut witness_bytes = witness.as_slice().to_vec();
+      let diff = unsafe{lock_bytes.as_slice().as_ptr().offset_from(witness.as_slice().as_ptr())};
+      let start = diff as usize + multisig_script_len;
+      let end = start + signatures_len;
+      witness_bytes[start..end].fill(0);
+      blake2b.update(&witness_bytes);
+
+      QueryIter::new(load_witness_args, Source::GroupInput).skip(1)
+      .for_each(|data|{
+        blake2b.update(&(data.total_size() as u64).to_le_bytes());
+        blake2b.update(data.as_slice());
+      });
+      // For safety consideration, this lock script will also hash and guard all witnesses that
+      // have index values equal to or larger than the number of input cells. It assumes all
+      // witnesses that do have an input cell with the same index, will be guarded by the lock
+      // script of the input cell.
+      //
+      // For convenience reason, we provide a utility function here to calculate the number of
+      // input cells in a transaction
+      let i = calculate_inputs_len();
+      QueryIter::new(load_witness_args, Source::Input).skip(i)
+      .for_each(|data|{
+        blake2b.update(&(data.total_size() as u64).to_le_bytes());
+        blake2b.update(data.as_slice());
+      });
+      let mut tmp = [0;BLAKE2B_BLOCK_SIZE];
+      blake2b.finalize(&mut tmp);
+      tmp
+    };
+
+    let mut used_signatures = vec![0; pubkeys_cnt.into()];
+
     Ok(())
 }
+
+
+/* calculate inputs length */
+fn calculate_inputs_len() -> usize {
+  /* lower bound, at least tx has one input */
+  let mut lo = 0;
+  /* higher bound */
+  let mut hi = 4;
+  /* try to load input until failing to increase lo and hi */
+  loop {
+    if let Ok(_since) = load_input_since(hi, Source::Input) {
+      lo = hi;
+      hi *= 2;
+    } else {
+      break;
+    }
+  }
+
+  /* now we get our lower bound and higher bound,
+   count number of inputs by binary search */
+  while lo + 1 != hi {
+    let i = (lo + hi) / 2;
+    if let Ok(_since) = load_input_since(i, Source::Input) {
+      lo = i;
+    } else {
+      hi = i;
+    }
+  }
+  /* now lo is last input index and hi is length of inputs */
+  hi
+}
+
 
 fn check_since(since:u64)->Result<(), Error> {
     const SINCE_VALUE_BITS:usize = 56;
