@@ -14,6 +14,7 @@
 // define modules
 mod entry;
 mod error;
+mod secp256k1_helper;
 
 use core::arch::asm;
 use ckb_std::{

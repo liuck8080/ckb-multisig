@@ -1,9 +1,5 @@
 // Import from `core` instead of from `std` since we are in no-std mode
-use core::{result::Result, convert::TryInto, hash::Hasher};
-
-// Import heap related library from `alloc`
-// https://doc.rust-lang.org/alloc/index.html
-use alloc::{vec, vec::Vec, borrow::ToOwned};
+use core::{result::Result, convert::TryInto};
 
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
@@ -126,9 +122,8 @@ pub fn main() -> Result<(), Error> {
       tmp
     };
 
-    let mut used_signatures = vec![0; pubkeys_cnt.into()];
-
-    Ok(())
+    crate::secp256k1_helper::validate_secp256k1_multisignautre(require_first_n, threshold, pubkeys_cnt,
+      &message, lock_bytes.as_slice(), multisig_script_len)
 }
 
 

@@ -10,3 +10,5 @@ contracts/c/build/*
 build/*
 !.gitkeep
 .tmp/
+
+contracts/ckb-multisig/ckb-lib-secp256k1/build/
