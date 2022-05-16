@@ -15,7 +15,7 @@ pub enum Error {
     // PubkeyBlake160Hash = -31,
     InvalidReserveField = -41,
     InvalidPubkeysCnt = -42,
-    InvalidThreshold  = -43,
+    InvalidThreshold = -43,
     InvalidRequireFirstN = -44,
     MultsigScriptHash = -51,
     Verification = -52,
@@ -33,4 +33,3 @@ impl From<SysError> for Error {
         }
     }
 }
-
