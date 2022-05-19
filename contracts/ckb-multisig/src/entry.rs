@@ -20,6 +20,7 @@ const U64_SIZE: usize = 8;
 const FLAGS_SIZE: usize = 4;
 const SIGNATURE_SIZE: usize = 65;
 const BLAKE2B_BLOCK_SIZE: usize = 32;
+const  CKB_HASH_PERSONALIZATION: &[u8] = b"ckb-default-hash";
 
 pub fn main() -> Result<(), Error> {
     let script = load_script()?;
@@ -41,23 +42,23 @@ pub fn main() -> Result<(), Error> {
         if lock_opt.is_none() {
             return Err(Error::WitnessSize);
         }
-        let lock_bytes = lock_opt.to_opt().unwrap();
+        let lock_bytes = lock_opt.to_opt().unwrap().raw_data();
         if lock_bytes.len() < FLAGS_SIZE {
             return Err(Error::WitnessSize);
         }
         lock_bytes
     };
 
-    if u8::from(lock_bytes.get(0).unwrap()) != 0 {
+    if *lock_bytes.get(0).unwrap() != 0u8 {
         return Err(Error::InvalidReserveField);
     }
-    let require_first_n: u8 = lock_bytes.get(1).unwrap().into();
+    let require_first_n: u8 = *lock_bytes.get(1).unwrap();
 
-    let threshold = u8::from(lock_bytes.get(2).unwrap());
+    let threshold = *lock_bytes.get(2).unwrap();
     if threshold == 0 {
         return Err(Error::InvalidThreshold);
     }
-    let pubkeys_cnt: u8 = Into::<u8>::into(lock_bytes.get(3).unwrap());
+    let pubkeys_cnt: u8 = *lock_bytes.get(3).unwrap();
     if pubkeys_cnt == 0 {
         return Err(Error::InvalidPubkeysCnt);
     }
@@ -78,25 +79,24 @@ pub fn main() -> Result<(), Error> {
     {
         // check multisig args hash
         let mut tmp = [0; BLAKE2B_BLOCK_SIZE];
-        let mut blake2b = Blake2bBuilder::new(BLAKE2B_BLOCK_SIZE).build();
-        blake2b.update(&lock_bytes.as_slice()[0..multisig_script_len]);
+        let mut blake2b = Blake2bBuilder::new(BLAKE2B_BLOCK_SIZE).personal(CKB_HASH_PERSONALIZATION).build();
+        blake2b.update(&lock_bytes[0..multisig_script_len]);
         blake2b.finalize(&mut tmp);
 
-        if args.as_ref() != tmp.as_slice() {
+        if args.as_ref() != &tmp[0..BLAKE160_SIZE] {
             return Err(Error::MultsigScriptHash);
         }
     }
     check_since(since)?;
 
     let message = {
-        let mut blake2b = Blake2bBuilder::new(BLAKE2B_BLOCK_SIZE).build();
+        let mut blake2b = Blake2bBuilder::new(BLAKE2B_BLOCK_SIZE).personal(CKB_HASH_PERSONALIZATION).build();
         blake2b.update(&load_tx_hash()?);
         blake2b.update(&(witness.total_size() as u64).to_le_bytes());
 
         let mut witness_bytes = witness.as_slice().to_vec();
         let diff = unsafe {
-            lock_bytes
-                .as_slice()
+            (*lock_bytes)
                 .as_ptr()
                 .offset_from(witness.as_slice().as_ptr())
         };
@@ -135,7 +135,7 @@ pub fn main() -> Result<(), Error> {
         threshold,
         pubkeys_cnt,
         &message,
-        lock_bytes.as_slice(),
+        &(*lock_bytes),
         multisig_script_len,
     )
 }
