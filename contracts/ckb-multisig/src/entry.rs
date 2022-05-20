@@ -178,7 +178,7 @@ fn check_since(since: u64) -> Result<(), Error> {
     let since_value = since & SINCE_VALUE_MASK;
 
     for i in 0.. {
-        match load_input_since(i, Source::GroupOutput) {
+        match load_input_since(i, Source::GroupInput) {
             Ok(input_since) => {
                 let input_since_flags = input_since >> SINCE_VALUE_BITS;
                 let input_since_value = input_since & SINCE_VALUE_MASK;
