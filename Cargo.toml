@@ -1,5 +1,6 @@
 [workspace]
-members = ["tests", "contracts/ckb-multisig"]
+members = ["contracts/ckb-multisig"]
+exclude = ["orig-tests"]
 
 [profile.release]
 overflow-checks = true

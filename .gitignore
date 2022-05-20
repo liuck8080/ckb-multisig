@@ -12,3 +12,8 @@ build/*
 .tmp/
 
 contracts/ckb-multisig/ckb-lib-secp256k1/build/
+
+# cargo
+vendor
+orig-tests/target
+orig-tests/specs
