@@ -83,7 +83,7 @@ pub fn main() -> Result<(), Error> {
         blake2b.update(&lock_bytes[0..multisig_script_len]);
         blake2b.finalize(&mut tmp);
 
-        if args.as_ref() != &tmp[0..BLAKE160_SIZE] {
+        if &args.as_ref()[0..BLAKE160_SIZE] != &tmp[0..BLAKE160_SIZE] {
             return Err(Error::MultsigScriptHash);
         }
     }
