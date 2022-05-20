@@ -5,7 +5,7 @@ use core::{convert::TryInto, result::Result};
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
 use ckb_std::{
     ckb_constants::Source,
-    ckb_types::{bytes::Bytes, prelude::*},
+    ckb_types::{bytes::Bytes, prelude::*, packed::WitnessArgs},
     debug,
     error::SysError,
     high_level::{load_input_since, load_script, load_tx_hash, load_witness_args, QueryIter},
@@ -49,16 +49,16 @@ pub fn main() -> Result<(), Error> {
         lock_bytes
     };
 
-    if *lock_bytes.get(0).unwrap() != 0u8 {
+    if lock_bytes[0] != 0u8 {
         return Err(Error::InvalidReserveField);
     }
-    let require_first_n: u8 = *lock_bytes.get(1).unwrap();
+    let require_first_n: u8 = lock_bytes[1];
 
-    let threshold = *lock_bytes.get(2).unwrap();
+    let threshold = lock_bytes[2];
     if threshold == 0 {
         return Err(Error::InvalidThreshold);
     }
-    let pubkeys_cnt: u8 = *lock_bytes.get(3).unwrap();
+    let pubkeys_cnt: u8 = lock_bytes[3];
     if pubkeys_cnt == 0 {
         return Err(Error::InvalidPubkeysCnt);
     }
@@ -94,16 +94,15 @@ pub fn main() -> Result<(), Error> {
         blake2b.update(&load_tx_hash()?);
         blake2b.update(&(witness.total_size() as u64).to_le_bytes());
 
-        let mut witness_bytes = witness.as_slice().to_vec();
-        let diff = unsafe {
-            (*lock_bytes)
-                .as_ptr()
-                .offset_from(witness.as_slice().as_ptr())
-        };
-        let start = diff as usize + multisig_script_len;
-        let end = start + signatures_len;
-        witness_bytes[start..end].fill(0);
-        blake2b.update(&witness_bytes);
+        {
+            let mut zero_lock = lock_bytes.to_vec();
+            zero_lock[multisig_script_len..multisig_script_len + signatures_len].fill(0);
+            let init_witness = WitnessArgs::from_slice(witness.as_slice()).unwrap()
+                .as_builder()
+                .lock(Some(Bytes::from(zero_lock)).pack())
+                .build();
+            blake2b.update(init_witness.as_slice());
+        }
 
         QueryIter::new(load_witness_args, Source::GroupInput)
             .skip(1)
