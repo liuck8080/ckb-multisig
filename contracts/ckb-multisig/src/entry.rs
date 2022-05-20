@@ -5,7 +5,7 @@ use core::{convert::TryInto, result::Result};
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
 use ckb_std::{
     ckb_constants::Source,
-    ckb_types::{bytes::Bytes, prelude::*, packed::WitnessArgs},
+    ckb_types::{bytes::Bytes, packed::WitnessArgs, prelude::*},
     debug,
     error::SysError,
     high_level::{load_input_since, load_script, load_tx_hash, load_witness_args, QueryIter},
@@ -20,7 +20,7 @@ const U64_SIZE: usize = 8;
 const FLAGS_SIZE: usize = 4;
 const SIGNATURE_SIZE: usize = 65;
 const BLAKE2B_BLOCK_SIZE: usize = 32;
-const  CKB_HASH_PERSONALIZATION: &[u8] = b"ckb-default-hash";
+const CKB_HASH_PERSONALIZATION: &[u8] = b"ckb-default-hash";
 
 pub fn main() -> Result<(), Error> {
     let script = load_script()?;
@@ -79,7 +79,9 @@ pub fn main() -> Result<(), Error> {
     {
         // check multisig args hash
         let mut tmp = [0; BLAKE2B_BLOCK_SIZE];
-        let mut blake2b = Blake2bBuilder::new(BLAKE2B_BLOCK_SIZE).personal(CKB_HASH_PERSONALIZATION).build();
+        let mut blake2b = Blake2bBuilder::new(BLAKE2B_BLOCK_SIZE)
+            .personal(CKB_HASH_PERSONALIZATION)
+            .build();
         blake2b.update(&lock_bytes[0..multisig_script_len]);
         blake2b.finalize(&mut tmp);
 
@@ -90,14 +92,17 @@ pub fn main() -> Result<(), Error> {
     check_since(since)?;
 
     let message = {
-        let mut blake2b = Blake2bBuilder::new(BLAKE2B_BLOCK_SIZE).personal(CKB_HASH_PERSONALIZATION).build();
+        let mut blake2b = Blake2bBuilder::new(BLAKE2B_BLOCK_SIZE)
+            .personal(CKB_HASH_PERSONALIZATION)
+            .build();
         blake2b.update(&load_tx_hash()?);
         blake2b.update(&(witness.total_size() as u64).to_le_bytes());
 
         {
             let mut zero_lock = lock_bytes.to_vec();
             zero_lock[multisig_script_len..multisig_script_len + signatures_len].fill(0);
-            let init_witness = WitnessArgs::from_slice(witness.as_slice()).unwrap()
+            let init_witness = WitnessArgs::from_slice(witness.as_slice())
+                .unwrap()
                 .as_builder()
                 .lock(Some(Bytes::from(zero_lock)).pack())
                 .build();
